@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY main.py .
 
-RUN pip install flask
+RUN RUN pip install flask twilio
 
 ENV PORT=8080
 
