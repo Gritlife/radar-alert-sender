@@ -5,6 +5,11 @@ from twilio.rest import Client
 
 app = Flask(__name__)
 
+@app.route("/", methods=["GET"])
+def health():
+    return "Radar Alert Sender is LIVE 🚀", 200
+
+
 @app.route("/", methods=["POST"])
 def receive_message():
     envelope = request.get_json()
@@ -22,7 +27,6 @@ def receive_message():
 
     decoded_message = base64.b64decode(data).decode("utf-8")
 
-    # Twilio setup
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
     from_number = os.environ.get("TWILIO_FROM_NUMBER")
@@ -37,3 +41,9 @@ def receive_message():
     )
 
     return "Message processed", 200
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
