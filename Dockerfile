@@ -2,10 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY main.py .
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir flask twilio
+COPY . .
 
-ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "main.py"]
+CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
