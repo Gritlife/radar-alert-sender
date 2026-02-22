@@ -299,42 +299,62 @@ def ms_step(dt: datetime) -> Dict[str, Any]:
 def mr_step(dt: datetime) -> Dict[str, Any]:
     targets = list_targets()
     updated = 0
+
     for t in targets:
         if not t.get("active", True):
             continue
+
         ticker = (t.get("ticker") or t.get("_id") or "").upper()
         if not ticker:
             continue
 
         active_state = get_active(ticker)
+
+        # If position already active, only check expiry
         if active_state and active_state.get("status") in ("ATTACK_ISSUED", "ACTIVE"):
-            # MR still monitors active positions for weakening/stand down
-            # Placeholder: if expired, stand down
+
             expires = active_state.get("expires_at")
+
             if expires:
                 try:
                     exp_dt = datetime.fromisoformat(expires)
                     if exp_dt.tzinfo is None:
                         exp_dt = TZ.localize(exp_dt)
+
                     if dt > exp_dt:
-                        # Secondary command -> remove from active list per doctrine :contentReference[oaicite:11]{index=11}
                         remove_active(ticker)
-                        upsert_target(ticker, {"state": "REMOVED", "active": False, "updated_at": firestore.SERVER_TIMESTAMP})
+                        upsert_target(
+                            ticker,
+                            {
+                                "state": "REMOVED",
+                                "active": False,
+                                "updated_at": firestore.SERVER_TIMESTAMP,
+                            },
+                        )
                         log_event("mr_secondary_remove", {"ticker": ticker})
+
+                except Exception as e:
+                    logger.warning(f"Bad expires_at for {ticker}: {expires} ({e})")
+
+            # Active positions skip normal MR monitoring
             continue
 
-        # Not active: normal MR monitoring
+        # Normal MR monitoring
         mr = mr_monitor_target(t)
-        upsert_target(ticker, {
-            "state": "MONITORING",
-            **mr,
-            "updated_at": firestore.SERVER_TIMESTAMP,
-        })
+
+        upsert_target(
+            ticker,
+            {
+                "state": "MONITORING",
+                **mr,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            },
+        )
+
         updated += 1
 
     log_event("mr_step", {"updated": updated})
     return {"ran": True, "updated": updated}
-
 def mcs_step(dt: datetime) -> Dict[str, Any]:
     targets = list_targets()
     validated = 0
@@ -362,7 +382,7 @@ def mcs_step(dt: datetime) -> Dict[str, Any]:
 def attack_step(dt: datetime, user_id: str = "broadcast") -> Dict[str, Any]:
     """
     Issues new attacks only in attack window. :contentReference[oaicite:12]{index=12}
-    Enforces user trade limit (max 3 options trades per session). :contentReference[oaicite:13]{index=13}
+    Enforces user trade limit (max 6 options trades per session). :contentReference[oaicite:13]{index=13}
     """
     if not can_issue_attack_now(dt):
         return {"ran": False, "reason": "Outside attack window"}
