@@ -481,7 +481,38 @@ app = FastAPI()
 @app.get("/health")
 def health():
     return {"ok": True, "service": "mts", "env": ENV}
+from fastapi import HTTPException
+import os
 
+@app.post("/test-sms")
+def test_sms():
+    # Read Twilio creds from Cloud Run Environment Variables
+    sid = os.getenv("TWILIO_ACCOUNT_SID")
+    token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_num = os.getenv("TWILIO_FROM_NUMBER")
+    to_num = os.getenv("ALERT_TO_NUMBER")
+
+    missing = [k for k,v in {
+        "TWILIO_ACCOUNT_SID": sid,
+        "TWILIO_AUTH_TOKEN": token,
+        "TWILIO_FROM_NUMBER": from_num,
+        "ALERT_TO_NUMBER": to_num,
+    }.items() if not v]
+
+    if missing:
+        raise HTTPException(status_code=500, detail=f"Missing env vars: {', '.join(missing)}")
+
+    try:
+        from twilio.rest import Client
+        client = Client(sid, token)
+        msg = client.messages.create(
+            body="✅ MTS SMS TEST: Cloud Run -> Twilio OK.",
+            from_=from_num,
+            to=to_num
+        )
+        return {"ok": True, "sid": msg.sid}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 @app.post("/tick")
 async def tick_endpoint(request: Request):
     # Optional shared secret to prevent random callers
